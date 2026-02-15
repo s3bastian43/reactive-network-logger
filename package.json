@@ -1,18 +1,18 @@
 {
-  "name": "react-native-network-logger",
-  "version": "2.0.1",
-  "description": "An HTTP traffic monitor for React Native with zero dependencies",
+  "name": "@reactive-network/logger",
+  "version": "1.0.0",
+  "description": "Real-time network monitoring for React Native with desktop viewer",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
     ".": {
-      "source": "./src/index.tsx",
+      "source": "./src/index.ts",
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
     },
     "./package.json": "./package.json"
   },
-  "source": "src/index.tsx",
+  "source": "src/index.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/alexbrazier/react-native-network-logger.git"
@@ -49,7 +49,7 @@
     "prettier": "prettier --check '{,example/}src/**/*.{js,json,ts,tsx}' '{*,example/*}.{js,ts,tsx}'",
     "prepare": "bob build",
     "release": "release-it",
-    "example": "yarn workspace react-native-network-logger-example",
+    "example": "yarn workspace reactive-network-logger-example",
     "bootstrap": "yarn"
   },
   "devDependencies": {
@@ -79,7 +79,7 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": "*"
+    "react-native": ">=0.70.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"

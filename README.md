@@ -1,244 +1,129 @@
-# react-native-network-logger [![GitHub stars](https://img.shields.io/github/stars/alexbrazier/react-native-network-logger?label=Star%20Project&style=social)](https://github.com/alexbrazier/react-native-network-logger/stargazers)
+# @reactive-network/logger
 
-[![CI](https://github.com/alexbrazier/react-native-network-logger/workflows/CI/badge.svg)](https://github.com/alexbrazier/react-native-network-logger/actions)
-[![Dependencies](https://img.shields.io/badge/dependencies-none-green)](https://www.npmjs.com/package/react-native-network-logger?activeTab=dependencies)
-[![npm](https://img.shields.io/npm/v/react-native-network-logger)](https://www.npmjs.com/package/react-native-network-logger)
-[![npm bundle size](https://img.shields.io/bundlephobia/min/react-native-network-logger)](https://bundlephobia.com/result?p=react-native-network-logger)
-[![npm downloads](https://img.shields.io/npm/dm/react-native-network-logger)](https://www.npmjs.com/package/react-native-network-logger)
-[![License](https://img.shields.io/npm/l/react-native-network-logger)](./LICENSE)
+Real-time network request monitoring for React Native apps with desktop streaming.
 
-An HTTP traffic monitor for React Native including in app interface.
+This package intercepts `fetch` and `XMLHttpRequest` calls, then streams request and response data to the Reactive Network desktop app over WebSocket.
 
-An alternative to Wormholy but for both iOS and Android and with zero native dependencies.
-
-If this project has helped you out, please support us with a star 🌟.
-
-## Features
-
-- Log networks requests on iOS and Android
-- View network requests made with in app viewer
-- Debug network requests on release builds
-- Individually view request/response headers and body
-- Copy or share headers, body or full request
-- Share cURL representation of request
-- Zero native or JavaScript dependencies
-- Built in TypeScript definitions
-- Extracts GraphQL operation name
-- Export all logs in HAR format
-
-## Screenshots
-
-### iOS
-
-<p float="left" align="center">
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/ios-list.png" width="300" />
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/ios-details.png" width="300" /> 
-</p>
-<p float="left" align="center">
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/ios-list-dark.png" width="300" />
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/ios-details-dark.png" width="300" /> 
-</p>
-
-### Android
-
-<p float="left" align="center">
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/android-list.png" width="300" />
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/android-details.png" width="300" /> 
-</p>
-<p float="left" align="center">
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/android-list-dark.png" width="300" />
-  <img src="https://raw.githubusercontent.com/alexbrazier/react-native-network-logger/master/.github/images/android-details-dark.png" width="300" /> 
-</p>
-
-## Setup
-
-### Install
+## Installation
 
 ```bash
-yarn add react-native-network-logger
+npm install @reactive-network/logger
 ```
 
 or
 
-```
-npm install --save react-native-network-logger
+```bash
+yarn add @reactive-network/logger
 ```
 
-### Start Logging
-
-Call `startNetworkLogging` in your apps entry point to log every request, or call it on a button press to manually trigger it.
+## Quick Start
 
 ```ts
-import { startNetworkLogging } from 'react-native-network-logger';
+import { useEffect } from 'react';
+import { startNetworkLogging, stopNetworkLogging } from '@reactive-network/logger';
 
-startNetworkLogging();
-AppRegistry.registerComponent('App', () => App);
+export default function App() {
+  useEffect(() => {
+    if (__DEV__) {
+      startNetworkLogging({
+        desktopHost: '192.168.1.100',
+        desktopPort: 8089,
+      });
+    }
+
+    return () => {
+      stopNetworkLogging();
+    };
+  }, []);
+
+  return <YourApp />;
+}
 ```
 
-### Display Requests and Responses
+## API
 
 ```ts
-import NetworkLogger from 'react-native-network-logger';
+startNetworkLogging(options?: {
+  desktopHost?: string;
+  desktopPort?: number;
+  autoReconnect?: boolean; // default true
+  reconnectInterval?: number; // default 5000ms
+}): void;
 
-const MyScreen = () => <NetworkLogger />;
+stopNetworkLogging(): void;
+
+connectToDesktop(host: string, port?: number): void;
+
+disconnectFromDesktop(): void;
 ```
 
-#### Themes
+## Message Contract
 
-You can change between the dark and light theme by passing the `theme` prop with `"dark"` or `"light"`.
+The package emits full request objects to the desktop app:
 
 ```ts
-import NetworkLogger from 'react-native-network-logger';
-
-const MyScreen = () => <NetworkLogger theme="dark" />;
+interface NetworkRequest {
+  id: string;
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string | null;
+  timestamp: number;
+  status?: number;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  duration?: number;
+  error?: string;
+}
 ```
 
-If preferred you can also override the theme entirely by passing in a theme object.
+For each request:
+1. Initial object is sent immediately (pending request).
+2. Full object is sent again on response (same `id`).
+3. Full object is sent on failure with `error` and `duration`.
 
-> Note: breaking theme changes are not guaranteed to follow semver for updates
+## Reliability Guarantees
 
-```ts
-import NetworkLogger from 'react-native-network-logger';
+- Transparent interception (network calls continue normally)
+- WebSocket auto-reconnect every 5s by default
+- Offline queue up to 100 messages (FIFO, oldest dropped)
+- Body truncation at 10MB (`[Content truncated]`)
+- Binary payload placeholders (`[Binary data]` / `[Binary data: <content-type>]`)
+- Circular reference-safe serialization (`[Circular reference detected]`)
+- App backgrounding support (pauses callbacks in background, resumes on active)
 
-const MyScreen = () => (
-  <NetworkLogger
-    theme={{
-      colors: {
-        background: 'red',
-      },
-    }}
-  />
-);
-```
+## Troubleshooting
 
-### Logging options
+### No requests in desktop app
 
-#### Max Requests
+- Confirm desktop app is open before launching mobile app
+- Verify `desktopHost` points to your computer's local IP
+- Ensure phone/emulator and desktop are on the same network
+- Allow incoming traffic for port `8089` in your firewall
 
-You can configure the max number of requests stored on the device using by calling `startNetworkLogging` with the `maxRequests` option. The default is `500`.
+### Requests are intercepted but not streamed
 
-```ts
-startNetworkLogging({ maxRequests: 500 });
-```
-
-#### Ignored Hosts
-
-You can configure hosts that should be ignored by calling `startNetworkLogging` with the `ignoredHosts` option.
-
-```ts
-startNetworkLogging({ ignoredHosts: ['test.example.com'] });
-```
-
-#### Ignored Urls
-
-You can configure urls that should be ignored by calling `startNetworkLogging` with the `ignoredUrls` option.
-
-```ts
-startNetworkLogging({ ignoredUrls: ['https://test.example.com/page'] });
-```
-
-#### Ignored Patterns
-
-You can configure url patterns, including methods that should be ignored by calling `startNetworkLogging` with the `ignoredPatterns` option.
-
-```ts
-startNetworkLogging({
-  ignoredPatterns: [/^GET http:\/\/test\.example\.com\/pages\/.*$/],
-});
-```
-
-The pattern to match with is the method followed by the url, e.g. `GET http://example.com/test` so you can use the pattern to match anything, e.g. ignoring all HEAD requests.
-
-```ts
-startNetworkLogging({
-  // Ignore all HEAD requests
-  ignoredPatterns: [/^HEAD /],
-});
-```
-
-#### Sorting
-
-Set the sort order of requests. Options are `asc` or `desc`, default is `desc` (most recent at the top).
-
-```tsx
-import NetworkLogger from 'react-native-network-logger';
-
-const MyScreen = () => <NetworkLogger sort="asc" />;
-```
-
-#### Max Rows
-
-Set the maximum number of rows to display in the list to improve rendering. Default is same as request limit.
-
-```tsx
-import NetworkLogger from 'react-native-network-logger';
-
-const MyScreen = () => <NetworkLogger maxRows={100} />;
-```
-
-#### Compact Rows
-
-Make the rows smaller to fit more on the screen.
-
-```tsx
-import NetworkLogger from 'react-native-network-logger';
-
-const MyScreen = () => <NetworkLogger compact />;
-```
-
-#### Force Enable
-
-If you are running another network logging interceptor, e.g. Reactotron, the logger will not start as only one can be run at once. You can override this behaviour and force the logger to start by using the `forceEnable` option.
-
-```ts
-startNetworkLogging({ forceEnable: true });
-```
-
-#### Integrate with existing navigation
-
-Use your existing back button (e.g. in your navigation header) to navigate within the network logger.
-
-```tsx
-import NetworkLogger, { getBackHandler } from 'react-native-network-logger';
-
-const navigation = useNavigation();
-const onBack = getBackHandler(navigation.goBack);
-
-const MyScreen = () => (
-  <Screen onBackPressed={onBack}>
-    <NetworkLogger />
-  </Screen>
-);
-```
+- Call `connectToDesktop(host, port)` manually after app startup
+- Check logs for `[ReactiveNetwork]` connection errors
+- Ensure WebSocket server is listening on `0.0.0.0:8089`
 
 ## Example App
 
-To test the example app, after cloning the repo, install the required dependencies by running:
+The `example/` app demonstrates:
 
-```sh
+- automatic desktop connection
+- manual connect/disconnect
+- `fetch` GET/POST requests
+- `XMLHttpRequest` request
+- concurrent request burst
+
+Run it with:
+
+```bash
 yarn bootstrap
-```
-
-Then start the example app by running:
-
-```sh
 yarn example start
 ```
 
-You should then be able to open the expo server at http://localhost:3000/ and launch the app on iOS or Android.
-
-For more setup and development details, see [Contributing](#Contributing).
-
-## Why
-
-Network requests can be debugged using tools such as React Native Debugger, however this requires both a debug build of the app and the debugger to be enabled. This library can be built with you app and usable by anyone using your app to see network issues and report them back to developers.
-
-As the library is very small you can safely bundle it with the production version of your app and put it behind a flag, or have a separate testing build of the app which has the network logger enabled.
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests.
-
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT. Forked from `react-native-network-logger` by Alex Brazier.

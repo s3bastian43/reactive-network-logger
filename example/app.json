@@ -1,10 +1,10 @@
 {
-  "name": "react-native-network-logger-example",
-  "displayName": "AwesomeModule Example",
+  "name": "reactive-network-logger-example",
+  "displayName": "Reactive Network Logger Example",
   "expo": {
-    "name": "react-native-network-logger-example",
-    "slug": "react-native-network-logger-example",
-    "description": "Example app for react-native-network-logger",
+    "name": "reactive-network-logger-example",
+    "slug": "reactive-network-logger-example",
+    "description": "Example app for @reactive-network/logger",
     "privacy": "public",
     "version": "1.0.0",
     "platforms": ["ios", "android"],

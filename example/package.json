@@ -1,6 +1,6 @@
 {
-  "name": "react-native-network-logger-example",
-  "description": "Example app for react-native-network-logger",
+  "name": "reactive-network-logger-example",
+  "description": "Example app for @reactive-network/logger",
   "version": "0.0.1",
   "private": true,
   "main": "index",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.8",
+    "@reactive-network/logger": "*",
     "expo": "~53.0.9",
     "graphql": "^16.11.0",
     "react": "~19.0.0",

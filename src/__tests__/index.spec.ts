@@ -1,151 +1,155 @@
-import XHRInterceptor from '../XHRInterceptor';
-import { startNetworkLogging, stopNetworkLogging } from '..';
-import logger from '../loggerSingleton';
-import { LOGGER_MAX_REQUESTS, LOGGER_REFRESH_RATE } from '../constant';
-
-jest.mock('react-native/Libraries/Blob/FileReader', () => ({}));
-jest.mock('../XHRInterceptor', () => ({
-  isInterceptorEnabled: jest.fn(),
-  setOpenCallback: jest.fn(),
-  setRequestHeaderCallback: jest.fn(),
-  setSendCallback: jest.fn(),
-  setHeaderReceivedCallback: jest.fn(),
-  setResponseCallback: jest.fn(),
-  enableInterception: jest.fn(),
-  disableInterception: jest.fn(),
+jest.mock('react-native', () => ({
+  AppState: {
+    currentState: 'active',
+    addEventListener: jest.fn(),
+  },
 }));
 
-describe('singleton logger', () => {
-  afterEach(() => {
-    logger.disableXHRInterception();
-    jest.resetAllMocks();
-  });
-  it('should set options when starting the logger', () => {
-    (XHRInterceptor.isInterceptorEnabled as jest.Mock).mockReturnValueOnce(
-      false
-    );
-    expect(logger.enabled).toBe(false);
+jest.mock('../interceptor', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+    pause: jest.fn(),
+    resume: jest.fn(),
+  })),
+}));
 
+jest.mock('../desktopStreaming', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    sendRequest: jest.fn(),
+  })),
+}));
+
+import { AppState } from 'react-native';
+import DesktopStreaming from '../desktopStreaming';
+import NetworkInterceptor from '../interceptor';
+import {
+  connectToDesktop,
+  disconnectFromDesktop,
+  startNetworkLogging,
+  stopNetworkLogging,
+} from '..';
+
+describe('@reactive-network/logger public API', () => {
+  const mockRemoveAppStateListener = jest.fn();
+  const mockAddAppStateListener = AppState
+    .addEventListener as unknown as jest.Mock;
+  const mockNetworkInterceptorConstructor =
+    NetworkInterceptor as unknown as jest.Mock;
+  const mockDesktopStreamingConstructor = DesktopStreaming as unknown as jest.Mock;
+
+  const getInterceptorInstance = (index = 0) =>
+    mockNetworkInterceptorConstructor.mock.results[index]?.value as {
+      start: jest.Mock;
+      stop: jest.Mock;
+      pause: jest.Mock;
+      resume: jest.Mock;
+    };
+
+  const getStreamingInstance = (index = 0) =>
+    mockDesktopStreamingConstructor.mock.results[index]?.value as {
+      connect: jest.Mock;
+      disconnect: jest.Mock;
+      sendRequest: jest.Mock;
+    };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAddAppStateListener.mockReturnValue({
+      remove: mockRemoveAppStateListener,
+    });
+  });
+
+  afterEach(() => {
+    stopNetworkLogging();
+  });
+
+  it('starts interceptor and desktop streaming when host is provided', () => {
     startNetworkLogging({
-      maxRequests: 23,
-      ignoredHosts: ['foo'],
-      ignoredUrls: ['bar'],
-      ignoredPatterns: [/baz/],
+      desktopHost: '192.168.1.100',
+      desktopPort: 8089,
     });
 
-    // @ts-ignore
-    expect(logger.maxRequests).toBe(23);
-    // @ts-ignore
-    expect(logger.ignoredHosts).toEqual(new Set(['foo']));
-    // @ts-ignore
-    expect(logger.ignoredUrls).toEqual(new Set(['bar']));
-    // @ts-ignore
-    expect(logger.ignoredPatterns).toEqual([/baz/]);
-    expect(XHRInterceptor.isInterceptorEnabled).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setOpenCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setRequestHeaderCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setHeaderReceivedCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setSendCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setResponseCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.enableInterception).toHaveBeenCalledTimes(1);
-    expect(logger.enabled).toBe(true);
+    const interceptorInstance = getInterceptorInstance();
+    const streamingInstance = getStreamingInstance();
+
+    expect(mockNetworkInterceptorConstructor).toHaveBeenCalledTimes(1);
+    expect(interceptorInstance.start).toHaveBeenCalledTimes(1);
+    expect(mockDesktopStreamingConstructor).toHaveBeenCalledWith({
+      host: '192.168.1.100',
+      port: 8089,
+      autoReconnect: undefined,
+      reconnectInterval: undefined,
+    });
+    expect(streamingInstance.connect).toHaveBeenCalledTimes(1);
+    expect(mockAddAppStateListener).toHaveBeenCalledTimes(1);
   });
 
-  it('should not start twice the logger', () => {
-    (XHRInterceptor.isInterceptorEnabled as jest.Mock).mockReturnValueOnce(
-      false
-    );
-    expect(logger.enabled).toBe(false);
-
+  it('does not start interceptor twice', () => {
+    startNetworkLogging();
     startNetworkLogging();
 
-    expect(XHRInterceptor.isInterceptorEnabled).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setOpenCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setRequestHeaderCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setHeaderReceivedCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setSendCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setResponseCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.enableInterception).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.disableInterception).toHaveBeenCalledTimes(0);
-    expect(logger.enabled).toBe(true);
-
-    startNetworkLogging();
-
-    expect(XHRInterceptor.isInterceptorEnabled).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setOpenCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setRequestHeaderCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setHeaderReceivedCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setSendCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.setResponseCallback).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.enableInterception).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.disableInterception).toHaveBeenCalledTimes(0);
-    expect(logger.enabled).toBe(true);
+    expect(mockNetworkInterceptorConstructor).toHaveBeenCalledTimes(1);
+    expect(getInterceptorInstance().start).toHaveBeenCalledTimes(1);
   });
 
-  it('should stop the logger', () => {
-    (XHRInterceptor.isInterceptorEnabled as jest.Mock).mockReturnValueOnce(
-      false
-    );
-    expect(logger.enabled).toBe(false);
+  it('connectToDesktop reconnects with the new host', () => {
+    startNetworkLogging({
+      desktopHost: '192.168.1.100',
+      desktopPort: 8089,
+    });
 
+    connectToDesktop('192.168.1.101', 8090);
+
+    const firstStreamingInstance = getStreamingInstance(0);
+    const secondStreamingInstance = getStreamingInstance(1);
+
+    expect(mockDesktopStreamingConstructor).toHaveBeenNthCalledWith(1, {
+      host: '192.168.1.100',
+      port: 8089,
+      autoReconnect: undefined,
+      reconnectInterval: undefined,
+    });
+    expect(mockDesktopStreamingConstructor).toHaveBeenNthCalledWith(2, {
+      host: '192.168.1.101',
+      port: 8090,
+      autoReconnect: undefined,
+      reconnectInterval: undefined,
+    });
+    expect(firstStreamingInstance.disconnect).toHaveBeenCalledTimes(1);
+    expect(secondStreamingInstance.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnectFromDesktop closes streaming safely', () => {
+    startNetworkLogging({ desktopHost: '192.168.1.100' });
+
+    disconnectFromDesktop();
+    disconnectFromDesktop();
+
+    expect(getStreamingInstance().disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('pauses in background and resumes when active', () => {
     startNetworkLogging();
+    const appStateHandler = mockAddAppStateListener.mock.calls[0]?.[1];
 
-    expect(XHRInterceptor.isInterceptorEnabled).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.enableInterception).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.disableInterception).toHaveBeenCalledTimes(0);
+    appStateHandler?.('background');
+    appStateHandler?.('active');
 
+    expect(getInterceptorInstance().pause).toHaveBeenCalledTimes(1);
+    expect(getInterceptorInstance().resume).toHaveBeenCalledTimes(2); // initial active + foreground
+  });
+
+  it('stopNetworkLogging disconnects and removes listeners', () => {
+    startNetworkLogging({ desktopHost: '192.168.1.100' });
     stopNetworkLogging();
 
-    expect(XHRInterceptor.isInterceptorEnabled).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.enableInterception).toHaveBeenCalledTimes(1);
-    expect(XHRInterceptor.disableInterception).toHaveBeenCalledTimes(1);
-
-    expect(XHRInterceptor.setOpenCallback).toHaveBeenCalledTimes(2);
-    expect(XHRInterceptor.setRequestHeaderCallback).toHaveBeenCalledTimes(2);
-    expect(XHRInterceptor.setHeaderReceivedCallback).toHaveBeenCalledTimes(2);
-    expect(XHRInterceptor.setSendCallback).toHaveBeenCalledTimes(2);
-    expect(XHRInterceptor.setResponseCallback).toHaveBeenCalledTimes(2);
-
-    expect(logger.enabled).toBe(false);
-    expect(logger.isPaused).toBe(false);
-    // @ts-ignore
-    expect(logger.requests).toEqual([]);
-    // @ts-ignore
-    expect(logger.xhrIdMap).toEqual(new Map());
-    // @ts-ignore
-    expect(logger.maxRequests).toBe(LOGGER_MAX_REQUESTS);
-    // @ts-ignore
-    expect(logger.ignoredHosts).toBeUndefined();
-    // @ts-ignore
-    expect(logger.ignoredUrls).toBeUndefined();
-    // @ts-ignore
-    expect(logger.ignoredPatterns).toBeUndefined();
-  });
-});
-
-describe('clearRequests', () => {
-  it('should clear the requests', () => {
-    jest.useFakeTimers();
-    logger.callback = jest.fn();
-
-    // @ts-ignore
-    logger.requests = ['test-request'];
-
-    logger.clearRequests();
-    jest.advanceTimersByTime(LOGGER_REFRESH_RATE);
-
-    expect(logger.getRequests()).toEqual([]);
-    expect(logger.callback).toHaveBeenCalledTimes(1);
-    expect(logger.callback).toHaveBeenCalledWith([]);
-    jest.useFakeTimers();
-  });
-});
-
-describe('getRequests', () => {
-  it('should return the requests', () => {
-    // @ts-ignore
-    logger.requests = ['test-request'];
-
-    expect(logger.getRequests()).toEqual(['test-request']);
+    expect(getInterceptorInstance().stop).toHaveBeenCalledTimes(1);
+    expect(getStreamingInstance().disconnect).toHaveBeenCalledTimes(1);
+    expect(mockRemoveAppStateListener).toHaveBeenCalledTimes(1);
   });
 });
