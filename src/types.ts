@@ -1,41 +1,66 @@
-import NetworkRequestInfo from './NetworkRequestInfo';
+export type Headers = Record<string, string>;
 
-export type Headers = { [header: string]: string };
+export type RequestMethod =
+  | 'GET'
+  | 'POST'
+  | 'PUT'
+  | 'PATCH'
+  | 'DELETE'
+  | 'HEAD'
+  | 'OPTIONS'
+  | 'TRACE'
+  | 'CONNECT'
+  | (string & {});
 
-export type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export interface NetworkRequest {
+  id: string;
+  url: string;
+  method: string;
+  headers: Headers;
+  body: string | null;
+  timestamp: number;
+  status?: number;
+  responseHeaders?: Headers;
+  responseBody?: string;
+  duration?: number;
+  error?: string;
+}
 
-export type StartNetworkLoggingOptions = {
+export interface StreamingOptions {
+  host: string;
+  port?: number;
+  autoReconnect?: boolean;
+  reconnectInterval?: number;
+}
+
+export interface StartNetworkLoggingOptions {
+  desktopHost?: string;
+  desktopPort?: number;
+  autoReconnect?: boolean;
+  reconnectInterval?: number;
+
   /**
-   * Max number of requests to keep before overwriting
-   * @default 500
+   * Legacy options kept for compatibility with the original package.
    */
   maxRequests?: number;
-  /** List of hosts to ignore, e.g. `services.test.com` */
   ignoredHosts?: string[];
-  /** List of urls to ignore, e.g. `https://services.test.com/test` */
   ignoredUrls?: string[];
-  /**
-   * List of url patterns to ignore, e.g. `/^GET https://test.com\/pages\/.*$/`
-   *
-   * Url to match with is in the format: `${method} ${url}`, e.g. `GET https://test.com/pages/123`
-   */
   ignoredPatterns?: RegExp[];
-  /**
-   * Force the network logger to start even if another program is using the network interceptor
-   * e.g. a dev/debuging program
-   */
   forceEnable?: boolean;
-  /**
-   * Refresh rate of the logger in milliseconds
-   * @default 50
-   */
   refreshRate?: number;
-};
+}
 
-export type NetworkRequestInfoRow = Pick<
-  NetworkRequestInfo,
-  'url' | 'gqlOperation' | 'id' | 'method' | 'status' | 'duration' | 'startTime'
->;
+export type NetworkRequestCallback = (request: NetworkRequest) => void;
+
+export type NetworkRequestInfoRow = {
+  url: string;
+  gqlOperation?: string;
+  id: string;
+  method: RequestMethod;
+  status: number;
+  duration: number;
+  startTime: number;
+};
 
 export type DeepPartial<T> = {
   [P in keyof T]?: DeepPartial<T[P]>;
