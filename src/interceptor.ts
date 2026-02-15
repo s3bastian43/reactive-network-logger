@@ -14,6 +14,11 @@ type FetchFunction = (input: unknown, init?: unknown) => Promise<unknown>;
 type XHROpen = (method: string, url: string, ...rest: unknown[]) => unknown;
 type XHRSend = (body?: unknown) => unknown;
 type XHRSetRequestHeader = (header: string, value: string) => unknown;
+type XHRPrototype = {
+  open: XHROpen;
+  send: XHRSend;
+  setRequestHeader: XHRSetRequestHeader;
+};
 
 interface XHRMetadata {
   id: string;
@@ -61,9 +66,9 @@ export default class NetworkInterceptor {
       return;
     }
 
-    const globalRef = globalThis as {
+    const globalRef = globalThis as unknown as {
       fetch?: FetchFunction;
-      XMLHttpRequest?: { prototype?: Record<string, unknown> };
+      XMLHttpRequest?: { prototype?: XHRPrototype };
     };
 
     if (this.originalFetch) {
@@ -73,13 +78,13 @@ export default class NetworkInterceptor {
     const xhrPrototype = globalRef.XMLHttpRequest?.prototype;
     if (xhrPrototype) {
       if (this.originalXHROpen) {
-        xhrPrototype.open = this.originalXHROpen as unknown;
+        xhrPrototype.open = this.originalXHROpen;
       }
       if (this.originalXHRSend) {
-        xhrPrototype.send = this.originalXHRSend as unknown;
+        xhrPrototype.send = this.originalXHRSend;
       }
       if (this.originalXHRSetRequestHeader) {
-        xhrPrototype.setRequestHeader = this.originalXHRSetRequestHeader as unknown;
+        xhrPrototype.setRequestHeader = this.originalXHRSetRequestHeader;
       }
     }
 
@@ -223,8 +228,8 @@ export default class NetworkInterceptor {
   }
 
   private interceptXHR(): void {
-    const globalRef = globalThis as {
-      XMLHttpRequest?: { prototype?: Record<string, unknown> };
+    const globalRef = globalThis as unknown as {
+      XMLHttpRequest?: { prototype?: XHRPrototype };
     };
 
     const xhrPrototype = globalRef.XMLHttpRequest?.prototype;
@@ -240,6 +245,7 @@ export default class NetworkInterceptor {
     const interceptor = this;
 
     xhrPrototype.open = function open(
+      this: Record<string, unknown>,
       method: string,
       url: string,
       ...rest: unknown[]
@@ -256,10 +262,11 @@ export default class NetworkInterceptor {
         console.error('[ReactiveNetwork] Failed to create XHR metadata:', error);
       }
 
-      return interceptor.originalXHROpen!.call(this, method, url, ...rest);
+      return interceptor.originalXHROpen!.call(this as unknown as never, method, url, ...rest);
     } as unknown as XHROpen;
 
     xhrPrototype.setRequestHeader = function setRequestHeader(
+      this: Record<string, unknown>,
       header: string,
       value: string
     ) {
@@ -274,14 +281,18 @@ export default class NetworkInterceptor {
         console.error('[ReactiveNetwork] Failed to capture XHR request header:', error);
       }
 
-      return interceptor.originalXHRSetRequestHeader!.call(this, header, value);
+      return interceptor.originalXHRSetRequestHeader!.call(
+        this as unknown as never,
+        header,
+        value
+      );
     } as unknown as XHRSetRequestHeader;
 
-    xhrPrototype.send = function send(body?: unknown) {
+    xhrPrototype.send = function send(this: Record<string, unknown>, body?: unknown) {
       const xhr = this as XHRLike & Record<string, unknown>;
       const metadata = xhr[XHR_METADATA_KEY] as XHRMetadata | undefined;
       if (!metadata) {
-        return interceptor.originalXHRSend!.call(this, body);
+        return interceptor.originalXHRSend!.call(this as unknown as never, body);
       }
 
       metadata.timestamp = Date.now();
@@ -344,7 +355,7 @@ export default class NetworkInterceptor {
       xhr.addEventListener?.('timeout', onTimeout);
 
       try {
-        return interceptor.originalXHRSend!.call(this, body);
+        return interceptor.originalXHRSend!.call(this as unknown as never, body);
       } catch (error) {
         finalizeRequest({ error: getErrorMessage(error) });
         throw error;

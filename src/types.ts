@@ -6,11 +6,7 @@ export type RequestMethod =
   | 'PUT'
   | 'PATCH'
   | 'DELETE'
-  | 'HEAD'
-  | 'OPTIONS'
-  | 'TRACE'
-  | 'CONNECT'
-  | (string & {});
+  | 'HEAD';
 
 export interface NetworkRequest {
   id: string;

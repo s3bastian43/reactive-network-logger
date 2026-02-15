@@ -12,8 +12,8 @@
     "test": "jest"
   },
   "dependencies": {
-    "@reactive-network/logger": "*",
     "@apollo/client": "^3.13.8",
+    "@reactive-network/logger": "*",
     "expo": "~53.0.9",
     "graphql": "^16.11.0",
     "react": "~19.0.0",

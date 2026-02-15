@@ -1,47 +1,32 @@
-const mockRemoveAppStateListener = jest.fn();
-const mockAddAppStateListener = jest
-  .fn()
-  .mockReturnValue({ remove: mockRemoveAppStateListener });
-
 jest.mock('react-native', () => ({
   AppState: {
     currentState: 'active',
-    addEventListener: mockAddAppStateListener,
+    addEventListener: jest.fn(),
   },
-}));
-
-const mockInterceptorStart = jest.fn();
-const mockInterceptorStop = jest.fn();
-const mockInterceptorPause = jest.fn();
-const mockInterceptorResume = jest.fn();
-
-const mockNetworkInterceptorConstructor = jest.fn().mockImplementation(() => ({
-  start: mockInterceptorStart,
-  stop: mockInterceptorStop,
-  pause: mockInterceptorPause,
-  resume: mockInterceptorResume,
 }));
 
 jest.mock('../interceptor', () => ({
   __esModule: true,
-  default: mockNetworkInterceptorConstructor,
-}));
-
-const mockStreamingConnect = jest.fn();
-const mockStreamingDisconnect = jest.fn();
-const mockStreamingSendRequest = jest.fn();
-
-const mockDesktopStreamingConstructor = jest.fn().mockImplementation(() => ({
-  connect: mockStreamingConnect,
-  disconnect: mockStreamingDisconnect,
-  sendRequest: mockStreamingSendRequest,
+  default: jest.fn().mockImplementation(() => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+    pause: jest.fn(),
+    resume: jest.fn(),
+  })),
 }));
 
 jest.mock('../desktopStreaming', () => ({
   __esModule: true,
-  default: mockDesktopStreamingConstructor,
+  default: jest.fn().mockImplementation(() => ({
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    sendRequest: jest.fn(),
+  })),
 }));
 
+import { AppState } from 'react-native';
+import DesktopStreaming from '../desktopStreaming';
+import NetworkInterceptor from '../interceptor';
 import {
   connectToDesktop,
   disconnectFromDesktop,
@@ -50,6 +35,28 @@ import {
 } from '..';
 
 describe('@reactive-network/logger public API', () => {
+  const mockRemoveAppStateListener = jest.fn();
+  const mockAddAppStateListener = AppState
+    .addEventListener as unknown as jest.Mock;
+  const mockNetworkInterceptorConstructor =
+    NetworkInterceptor as unknown as jest.Mock;
+  const mockDesktopStreamingConstructor = DesktopStreaming as unknown as jest.Mock;
+
+  const getInterceptorInstance = (index = 0) =>
+    mockNetworkInterceptorConstructor.mock.results[index]?.value as {
+      start: jest.Mock;
+      stop: jest.Mock;
+      pause: jest.Mock;
+      resume: jest.Mock;
+    };
+
+  const getStreamingInstance = (index = 0) =>
+    mockDesktopStreamingConstructor.mock.results[index]?.value as {
+      connect: jest.Mock;
+      disconnect: jest.Mock;
+      sendRequest: jest.Mock;
+    };
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockAddAppStateListener.mockReturnValue({
@@ -67,15 +74,18 @@ describe('@reactive-network/logger public API', () => {
       desktopPort: 8089,
     });
 
+    const interceptorInstance = getInterceptorInstance();
+    const streamingInstance = getStreamingInstance();
+
     expect(mockNetworkInterceptorConstructor).toHaveBeenCalledTimes(1);
-    expect(mockInterceptorStart).toHaveBeenCalledTimes(1);
+    expect(interceptorInstance.start).toHaveBeenCalledTimes(1);
     expect(mockDesktopStreamingConstructor).toHaveBeenCalledWith({
       host: '192.168.1.100',
       port: 8089,
       autoReconnect: undefined,
       reconnectInterval: undefined,
     });
-    expect(mockStreamingConnect).toHaveBeenCalledTimes(1);
+    expect(streamingInstance.connect).toHaveBeenCalledTimes(1);
     expect(mockAddAppStateListener).toHaveBeenCalledTimes(1);
   });
 
@@ -84,7 +94,7 @@ describe('@reactive-network/logger public API', () => {
     startNetworkLogging();
 
     expect(mockNetworkInterceptorConstructor).toHaveBeenCalledTimes(1);
-    expect(mockInterceptorStart).toHaveBeenCalledTimes(1);
+    expect(getInterceptorInstance().start).toHaveBeenCalledTimes(1);
   });
 
   it('connectToDesktop reconnects with the new host', () => {
@@ -94,6 +104,9 @@ describe('@reactive-network/logger public API', () => {
     });
 
     connectToDesktop('192.168.1.101', 8090);
+
+    const firstStreamingInstance = getStreamingInstance(0);
+    const secondStreamingInstance = getStreamingInstance(1);
 
     expect(mockDesktopStreamingConstructor).toHaveBeenNthCalledWith(1, {
       host: '192.168.1.100',
@@ -107,8 +120,8 @@ describe('@reactive-network/logger public API', () => {
       autoReconnect: undefined,
       reconnectInterval: undefined,
     });
-    expect(mockStreamingDisconnect).toHaveBeenCalledTimes(1);
-    expect(mockStreamingConnect).toHaveBeenCalledTimes(2);
+    expect(firstStreamingInstance.disconnect).toHaveBeenCalledTimes(1);
+    expect(secondStreamingInstance.connect).toHaveBeenCalledTimes(1);
   });
 
   it('disconnectFromDesktop closes streaming safely', () => {
@@ -117,7 +130,7 @@ describe('@reactive-network/logger public API', () => {
     disconnectFromDesktop();
     disconnectFromDesktop();
 
-    expect(mockStreamingDisconnect).toHaveBeenCalledTimes(1);
+    expect(getStreamingInstance().disconnect).toHaveBeenCalledTimes(1);
   });
 
   it('pauses in background and resumes when active', () => {
@@ -127,16 +140,16 @@ describe('@reactive-network/logger public API', () => {
     appStateHandler?.('background');
     appStateHandler?.('active');
 
-    expect(mockInterceptorPause).toHaveBeenCalledTimes(1);
-    expect(mockInterceptorResume).toHaveBeenCalledTimes(2); // initial active + foreground
+    expect(getInterceptorInstance().pause).toHaveBeenCalledTimes(1);
+    expect(getInterceptorInstance().resume).toHaveBeenCalledTimes(2); // initial active + foreground
   });
 
   it('stopNetworkLogging disconnects and removes listeners', () => {
     startNetworkLogging({ desktopHost: '192.168.1.100' });
     stopNetworkLogging();
 
-    expect(mockInterceptorStop).toHaveBeenCalledTimes(1);
-    expect(mockStreamingDisconnect).toHaveBeenCalledTimes(1);
+    expect(getInterceptorInstance().stop).toHaveBeenCalledTimes(1);
+    expect(getStreamingInstance().disconnect).toHaveBeenCalledTimes(1);
     expect(mockRemoveAppStateListener).toHaveBeenCalledTimes(1);
   });
 });
